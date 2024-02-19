@@ -943,7 +943,7 @@ open class Element: Node {
         }
     }
 
-class ImageNodeVisitor: NodeVisitor {
+    class ImageNodeVisitor: NodeVisitor {
         let accum: StringBuilder
         let trimAndNormaliseWhitespace: Bool
         var currentSource: Element? = nil
@@ -1009,6 +1009,81 @@ class ImageNodeVisitor: NodeVisitor {
         public func tail(_ node: Node, _ depth: Int) {
         }
     }
+    
+    class ImageNodeVisitor2: NodeVisitor {
+        let accum: StringBuilder
+        let trimAndNormaliseWhitespace: Bool
+        let imageURLs: StringBuilder
+        let locations: StringBuilder
+        var currentSource: Element? = nil
+        init(_ accum: StringBuilder, trimAndNormaliseWhitespace: Bool, imageURLs: StringBuilder, locations: StringBuilder) {
+            self.accum = accum
+            self.trimAndNormaliseWhitespace = trimAndNormaliseWhitespace
+            self.imageURLs = imageURLs
+            self.locations = locations
+        }
+        public func head(_ node: Node, _ depth: Int) {
+            if let textNode = (node as? TextNode) {
+                if trimAndNormaliseWhitespace {
+                    Element.appendNormalisedText(accum, textNode)
+                } else {
+                    accum.append(textNode.getWholeText())
+                }
+            } else if let element = (node as? Element) {
+                var siblings = element.siblingElements()
+                if element._tag.getName() == "source" {
+                    if currentSource == nil || !(siblings.contains(currentSource!) || element == currentSource) {
+                        do {
+                            var sources = try siblings.select("source")
+                            sources.add(0, element)
+                            currentSource = sources.last()
+                            
+                            do {
+                                let srcset = try currentSource!.attr("srcset")
+                                let images = srcset.components(separatedBy: ",")
+                                imageURLs.append(images.last! + "<")
+                                locations.append("\(accum.toString().split(separator: " ").count)<")
+                            }catch{
+                                do {
+                                    let src = try currentSource!.attr("src")
+                                    imageURLs.append(src  + "<")
+                                    locations.append("\(accum.toString().split(separator: " ").count)<")
+                                }catch{
+                                    print("Failed to decode image")
+                                }
+                            }
+                        }catch{
+                            print("Failed to decode image")
+                        }
+                    }
+                } else if element._tag.getName() == "img" {
+                    if currentSource == nil || !(siblings.contains(currentSource!) || element == currentSource) {
+                        do {
+                            let srcset = try element.attr("srcset")
+                            let images = srcset.components(separatedBy: ",")
+                            imageURLs.append(images.last! + "<")
+                            locations.append("\(accum.toString().split(separator: " ").count)<")
+                        }catch{
+                            do {
+                                let src = try element.attr("src")
+                                imageURLs.append(src + "<")
+                                locations.append("\(accum.toString().split(separator: " ").count)<")
+                            }catch{
+                                print("Failed to decode image")
+                            }
+                        }
+                    }
+                } else if !accum.isEmpty &&
+                    (element.isBlock() || element._tag.getName() == "br") &&
+                    !TextNode.lastCharIsWhitespace(accum) {
+                    accum.append(" ")
+                }
+            }
+        }
+        
+        public func tail(_ node: Node, _ depth: Int) {
+        }
+    }
 	
     public func text(trimAndNormaliseWhitespace: Bool = true)throws->String {
         let accum: StringBuilder = StringBuilder()
@@ -1020,7 +1095,7 @@ class ImageNodeVisitor: NodeVisitor {
         return text
     }
 
-public func textAndImages(trimAndNormaliseWhitespace: Bool = true)throws->String {
+    public func textAndImages(trimAndNormaliseWhitespace: Bool = true)throws->String {
         let accum: StringBuilder = StringBuilder()
         try NodeTraversor(ImageNodeVisitor(accum, trimAndNormaliseWhitespace: trimAndNormaliseWhitespace)).traverse(self)
         let text = accum.toString()
@@ -1028,6 +1103,18 @@ public func textAndImages(trimAndNormaliseWhitespace: Bool = true)throws->String
             return text.trim()
         }
         return text
+    }
+    
+    public func textAndImagesDict(trimAndNormaliseWhitespace: Bool = true)throws->(String, String, String) {
+        let accum: StringBuilder = StringBuilder()
+        let imageURLs: StringBuilder = StringBuilder()
+        let locations: StringBuilder = StringBuilder()
+        try NodeTraversor(ImageNodeVisitor2(accum, trimAndNormaliseWhitespace: trimAndNormaliseWhitespace, imageURLs: imageURLs, locations: locations)).traverse(self)
+        let text = accum.toString()
+        if trimAndNormaliseWhitespace {
+            return (text.trim(), imageURLs.toString(), locations.toString())
+        }
+        return (text, imageURLs.toString(), locations.toString())
     }
 
     /**
