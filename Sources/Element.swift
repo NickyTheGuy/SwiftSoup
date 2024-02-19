@@ -1042,12 +1042,12 @@ open class Element: Node {
                                 let srcset = try currentSource!.attr("srcset")
                                 let images = srcset.components(separatedBy: ",")
                                 imageURLs.append(images.last! + "<")
-                                locations.append("\(accum.toString().split(separator: " ").count)<")
+                                locations.append("\(accum.toString().components(separatedBy: .whitespacesAndNewlines).count)<")
                             }catch{
                                 do {
                                     let src = try currentSource!.attr("src")
                                     imageURLs.append(src  + "<")
-                                    locations.append("\(accum.toString().split(separator: " ").count)<")
+                                    locations.append("\(accum.toString().components(separatedBy: .whitespacesAndNewlines).count)<")
                                 }catch{
                                     print("Failed to decode image")
                                 }
@@ -1062,12 +1062,12 @@ open class Element: Node {
                             let srcset = try element.attr("srcset")
                             let images = srcset.components(separatedBy: ",")
                             imageURLs.append(images.last! + "<")
-                            locations.append("\(accum.toString().split(separator: " ").count)<")
+                            locations.append("\(accum.toString().components(separatedBy: .whitespacesAndNewlines).count)<")
                         }catch{
                             do {
                                 let src = try element.attr("src")
                                 imageURLs.append(src + "<")
-                                locations.append("\(accum.toString().split(separator: " ").count)<")
+                                locations.append("\(accum.toString().components(separatedBy: .whitespacesAndNewlines).count)<")
                             }catch{
                                 print("Failed to decode image")
                             }
@@ -1112,7 +1112,7 @@ open class Element: Node {
         try NodeTraversor(ImageNodeVisitor2(accum, trimAndNormaliseWhitespace: trimAndNormaliseWhitespace, imageURLs: imageURLs, locations: locations)).traverse(self)
         let text = accum.toString()
         if trimAndNormaliseWhitespace {
-            return (text.trim(), imageURLs.toString(), locations.toString())
+            return (text.trim2(), imageURLs.toString(), locations.toString())
         }
         return (text, imageURLs.toString(), locations.toString())
     }

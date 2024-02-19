@@ -92,6 +92,18 @@ extension String {
         }
         return self
     }
+    
+    func trim2() -> String {
+        // trimmingCharacters() in the stdlib is not very efficiently
+        // implemented, perhaps because it always creates a new string.
+        // Avoid actually calling it if it's not needed.
+        guard count > 0 else { return self }
+        let (firstChar, lastChar) = (first!, last!)
+        if firstChar.isWhitespace || lastChar.isWhitespace {
+            return trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return self
+    }
 
     func equalsIgnoreCase(string: String?) -> Bool {
         if let string = string {
