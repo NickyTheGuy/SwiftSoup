@@ -1076,7 +1076,7 @@ open class Element: Node {
                 } else if !accum.isEmpty &&
                     (element.isBlock() || element._tag.getName() == "br") &&
                     !TextNode.lastCharIsWhitespace(accum) {
-                    accum.append(" ")
+                    accum.append("\n")
                 }
             }
         }
