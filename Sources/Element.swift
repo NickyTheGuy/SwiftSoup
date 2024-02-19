@@ -942,9 +942,87 @@ open class Element: Node {
         public func tail(_ node: Node, _ depth: Int) {
         }
     }
+
+class ImageNodeVisitor: NodeVisitor {
+        let accum: StringBuilder
+        let trimAndNormaliseWhitespace: Bool
+        var currentSource: Element? = nil
+        init(_ accum: StringBuilder, trimAndNormaliseWhitespace: Bool) {
+            self.accum = accum
+            self.trimAndNormaliseWhitespace = trimAndNormaliseWhitespace
+        }
+        public func head(_ node: Node, _ depth: Int) {
+            if let textNode = (node as? TextNode) {
+                if trimAndNormaliseWhitespace {
+                    Element.appendNormalisedText(accum, textNode)
+                } else {
+                    accum.append(textNode.getWholeText())
+                }
+            } else if let element = (node as? Element) {
+                var siblings = element.siblingElements()
+                if element._tag.getName() == "source" {
+                    if currentSource == nil || !(siblings.contains(currentSource!) || element == currentSource) {
+                        do {
+                            var sources = try siblings.select("source")
+                            sources.add(0, element)
+                            currentSource = sources.last()
+                            
+                            do {
+                                let srcset = try currentSource!.attr("srcset")
+                                let images = srcset.components(separatedBy: ",")
+                                accum.append("<img>\(images.last!)</img>")
+                            }catch{
+                                do {
+                                    let src = try currentSource!.attr("src")
+                                    accum.append("<img>\(src)</img>")
+                                }catch{
+                                    print("Failed to decode image")
+                                }
+                            }
+                        }catch{
+                            print("Failed to decode image")
+                        }
+                    }
+                } else if element._tag.getName() == "img" {
+                    if currentSource == nil || !(siblings.contains(currentSource!) || element == currentSource) {
+                        do {
+                            let srcset = try element.attr("srcset")
+                            let images = srcset.components(separatedBy: ",")
+                            accum.append("<img>\(images.last!)</img>")
+                        }catch{
+                            do {
+                                let src = try element.attr("src")
+                                accum.append("<img>\(src)</img>")
+                            }catch{
+                                print("Failed to decode image")
+                            }
+                        }
+                    }
+                } else if !accum.isEmpty &&
+                    (element.isBlock() || element._tag.getName() == "br") &&
+                    !TextNode.lastCharIsWhitespace(accum) {
+                    accum.append(" ")
+                }
+            }
+        }
+        
+        public func tail(_ node: Node, _ depth: Int) {
+        }
+    }
+	
     public func text(trimAndNormaliseWhitespace: Bool = true)throws->String {
         let accum: StringBuilder = StringBuilder()
         try NodeTraversor(textNodeVisitor(accum, trimAndNormaliseWhitespace: trimAndNormaliseWhitespace)).traverse(self)
+        let text = accum.toString()
+        if trimAndNormaliseWhitespace {
+            return text.trim()
+        }
+        return text
+    }
+
+public func textAndImages(trimAndNormaliseWhitespace: Bool = true)throws->String {
+        let accum: StringBuilder = StringBuilder()
+        try NodeTraversor(ImageNodeVisitor(accum, trimAndNormaliseWhitespace: trimAndNormaliseWhitespace)).traverse(self)
         let text = accum.toString()
         if trimAndNormaliseWhitespace {
             return text.trim()
