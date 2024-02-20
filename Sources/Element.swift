@@ -1040,9 +1040,9 @@ open class Element: Node {
                             
                             var images = ""
                             if let srcset = try? currentSource!.attr("srcset"), !srcset.isEmpty {
-                                images = srcset.components(separatedBy: ",").last!.components(separatedBy: " ").first!
+                                images = srcset.components(separatedBy: ",").last!.components(separatedBy: .whitespaces).filter { !$0.isEmpty }.first!
                             }else{
-                                images = try currentSource!.attr("src")
+                                images = try currentSource!.attr("src").components(separatedBy: .whitespaces).filter { !$0.isEmpty }.first!
                             }
                             imageURLs.append(images + "<")
                             locations.append("\(accum.toString().components(separatedBy: .whitespacesAndNewlines).count)<")
@@ -1055,9 +1055,9 @@ open class Element: Node {
                         do {
                             var images = ""
                             if let srcset = try? element.attr("srcset"), !srcset.isEmpty {
-                                images = srcset.components(separatedBy: ",").last!.components(separatedBy: " ").first!
+                                images = srcset.components(separatedBy: ",").last!.components(separatedBy: .whitespaces).filter { !$0.isEmpty }.first!
                             }else{
-                                images = try element.attr("src")
+                                images = try element.attr("src").components(separatedBy: .whitespaces).filter { !$0.isEmpty }.first!
                             }
                             imageURLs.append(images + "<")
                             locations.append("\(accum.toString().components(separatedBy: .whitespacesAndNewlines).count)<")
