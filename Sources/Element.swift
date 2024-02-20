@@ -1038,20 +1038,14 @@ open class Element: Node {
                             sources.add(0, element)
                             currentSource = sources.last()
                             
-                            do {
-                                let srcset = try currentSource!.attr("srcset")
-                                let images = srcset.components(separatedBy: ",")
-                                imageURLs.append(images.last! + "<")
-                                locations.append("\(accum.toString().components(separatedBy: .whitespacesAndNewlines).count)<")
-                            }catch{
-                                do {
-                                    let src = try currentSource!.attr("src")
-                                    imageURLs.append(src  + "<")
-                                    locations.append("\(accum.toString().components(separatedBy: .whitespacesAndNewlines).count)<")
-                                }catch{
-                                    print("Failed to decode image")
-                                }
+                            var images = ""
+                            if let srcset = try? currentSource!.attr("srcset"), !srcset.isEmpty {
+                                images = srcset.components(separatedBy: ",").last!
+                            }else{
+                                images = try currentSource!.attr("src")
                             }
+                            imageURLs.append(images + "<")
+                            locations.append("\(accum.toString().components(separatedBy: .whitespacesAndNewlines).count)<")
                         }catch{
                             print("Failed to decode image")
                         }
@@ -1059,18 +1053,16 @@ open class Element: Node {
                 } else if element._tag.getName() == "img" {
                     if currentSource == nil || !(siblings.contains(currentSource!) || element == currentSource) {
                         do {
-                            let srcset = try element.attr("srcset")
-                            let images = srcset.components(separatedBy: ",")
-                            imageURLs.append(images.last! + "<")
+                            var images = ""
+                            if let srcset = try? element.attr("srcset"), !srcset.isEmpty {
+                                images = srcset.components(separatedBy: ",").last!
+                            }else{
+                                images = try element.attr("src")
+                            }
+                            imageURLs.append(images + "<")
                             locations.append("\(accum.toString().components(separatedBy: .whitespacesAndNewlines).count)<")
                         }catch{
-                            do {
-                                let src = try element.attr("src")
-                                imageURLs.append(src + "<")
-                                locations.append("\(accum.toString().components(separatedBy: .whitespacesAndNewlines).count)<")
-                            }catch{
-                                print("Failed to decode image")
-                            }
+                            print("Failed to decode image")
                         }
                     }
                 } else if !accum.isEmpty &&
