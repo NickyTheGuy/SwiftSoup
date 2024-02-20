@@ -1040,7 +1040,7 @@ open class Element: Node {
                             
                             var images = ""
                             if let srcset = try? currentSource!.attr("srcset"), !srcset.isEmpty {
-                                images = srcset.components(separatedBy: ",").last!
+                                images = srcset.components(separatedBy: ",").last!.components(separatedBy: " ").first!
                             }else{
                                 images = try currentSource!.attr("src")
                             }
@@ -1055,7 +1055,7 @@ open class Element: Node {
                         do {
                             var images = ""
                             if let srcset = try? element.attr("srcset"), !srcset.isEmpty {
-                                images = srcset.components(separatedBy: ",").last!
+                                images = srcset.components(separatedBy: ",").last!.components(separatedBy: " ").first!
                             }else{
                                 images = try element.attr("src")
                             }
