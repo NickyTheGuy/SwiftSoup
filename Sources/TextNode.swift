@@ -142,6 +142,10 @@ open class TextNode: Node {
     static public func lastCharIsWhitespace(_ sb: StringBuilder) -> Bool {
         return sb.toString().last == " "
     }
+    
+    static public func lastCharIsNewLine(_ sb: StringBuilder) -> Bool {
+        return sb.toString().last!.isNewline
+    }
 
     // attribute fiddling. create on first access.
     private func ensureAttributes() {

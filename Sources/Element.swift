@@ -1067,7 +1067,7 @@ open class Element: Node {
                     }
                 } else if !accum.isEmpty &&
                     (element.isBlock() || element._tag.getName() == "br") &&
-                    !TextNode.lastCharIsWhitespace(accum) {
+                    !TextNode.lastCharIsWhitespace(accum) && !TextNode.lastCharIsNewLine(accum) {
                     accum.append("\n")
                 }
             }
