@@ -7,6 +7,8 @@
 //
 
 import Foundation
+import CoreGraphics
+import ImageIO
 
 open class Element: Node {
 	var _tag: Tag
@@ -1014,14 +1016,64 @@ open class Element: Node {
         let accum: StringBuilder
         let trimAndNormaliseWhitespace: Bool
         let imageURLs: StringBuilder
-        let locations: StringBuilder
         var currentSource: Element? = nil
-        init(_ accum: StringBuilder, trimAndNormaliseWhitespace: Bool, imageURLs: StringBuilder, locations: StringBuilder) {
+        init(_ accum: StringBuilder, trimAndNormaliseWhitespace: Bool, imageURLs: StringBuilder) {
             self.accum = accum
             self.trimAndNormaliseWhitespace = trimAndNormaliseWhitespace
             self.imageURLs = imageURLs
-            self.locations = locations
         }
+        
+        public func filterImageBySizeAndShape(url: String) -> String {
+            let widthLowerLimit = 600
+            let heightLowerLimit = 400
+            var filteredImage = ""
+            
+            if url == "" {
+                return filteredImage
+            }
+            
+            if let imageSource = CGImageSourceCreateWithURL(URL(string: url)! as CFURL, nil) {
+                if let imageProperties = CGImageSourceCopyPropertiesAtIndex(imageSource, 0, nil) as? [CFString: Any] {
+                    if let pixelWidth = imageProperties[kCGImagePropertyPixelWidth] as? Int,
+                       let pixelHeight = imageProperties[kCGImagePropertyPixelHeight] as? Int {
+                        if pixelWidth >= widthLowerLimit && pixelHeight >= heightLowerLimit {
+                            filteredImage = url
+                        }
+                    }
+                }
+            }
+            
+            return filteredImage
+        }
+        
+        public func processSRCs(sets: [String], srcs: [String]) -> String {
+            var finalURLsArray = [String]()
+            for set in sets {
+                let allSources = set.components(separatedBy: ",")
+                let allURLs = allSources.map { $0.components(separatedBy: .whitespaces).filter { !$0.isEmpty }.first! }
+                let onlyURLs = allURLs.filter { $0.starts(with: "http") }
+                finalURLsArray += onlyURLs
+            }
+            finalURLsArray += srcs
+            
+            for url in finalURLsArray {
+                let filteredImage = filterImageBySizeAndShape(url: url)
+                if filteredImage != "" {
+                    return filteredImage
+                }
+            }
+            return ""
+        }
+        
+        public func checkDuplicates(url: String) {
+            let uniqueURLs = imageURLs.toString().split(separator: "<").map { str in String(str) }
+            
+            if !uniqueURLs.contains(where: { $0 == url }) {
+                imageURLs.append(url + "<")
+                accum.append("[KEEP THIS MARKER] ")
+            }
+        }
+        
         public func head(_ node: Node, _ depth: Int) {
             if let textNode = (node as? TextNode) {
                 if trimAndNormaliseWhitespace {
@@ -1039,13 +1091,25 @@ open class Element: Node {
                             currentSource = sources.last()
                             
                             var images = ""
-                            if let srcset = try? currentSource!.attr("srcset"), !srcset.isEmpty {
-                                images = srcset.components(separatedBy: ",").last!.components(separatedBy: .whitespaces).filter { !$0.isEmpty }.first!
-                            }else{
-                                images = try currentSource!.attr("src").components(separatedBy: .whitespaces).filter { !$0.isEmpty }.first!
+                            var sets = [String]()
+                            for source in sources {
+                                if let srcset = try? source.attr("srcset"), !srcset.isEmpty {
+                                    sets.append(srcset)
+                                }
                             }
-                            imageURLs.append(images + "<")
-                            locations.append("\(accum.toString().components(separatedBy: .whitespacesAndNewlines).count)<")
+                            
+                            var srcs = [String]()
+                            for source in sources {
+                                if let src = try currentSource!.attr("src").components(separatedBy: .whitespaces).filter({ $0.starts(with: "http") }).first {
+                                    srcs.append(src)
+                                }
+                            }
+                            if !(sets.isEmpty && srcs.isEmpty){
+                                images = processSRCs(sets: sets, srcs: srcs)
+                            }
+                            if images != "" {
+                                checkDuplicates(url: images)
+                            }
                         }catch{
                             print("Failed to decode image")
                         }
@@ -1054,13 +1118,21 @@ open class Element: Node {
                     if currentSource == nil || !(siblings.contains(currentSource!) || element == currentSource) {
                         do {
                             var images = ""
+                            var sets = [String]()
                             if let srcset = try? element.attr("srcset"), !srcset.isEmpty {
-                                images = srcset.components(separatedBy: ",").last!.components(separatedBy: .whitespaces).filter { !$0.isEmpty }.first!
-                            }else{
-                                images = try element.attr("src").components(separatedBy: .whitespaces).filter { !$0.isEmpty }.first!
+                                sets.append(srcset)
                             }
-                            imageURLs.append(images + "<")
-                            locations.append("\(accum.toString().components(separatedBy: .whitespacesAndNewlines).count)<")
+                            
+                            var srcs = [String]()
+                            if let src = try element.attr("src").components(separatedBy: .whitespaces).filter({ $0.starts(with: "http") }).first {
+                                srcs.append(src)
+                            }
+                            if !(sets.isEmpty && srcs.isEmpty){
+                                images = processSRCs(sets: sets, srcs: srcs)
+                            }
+                            if images != "" {
+                                checkDuplicates(url: images)
+                            }
                         }catch{
                             print("Failed to decode image")
                         }
@@ -1097,16 +1169,15 @@ open class Element: Node {
         return text
     }
     
-    public func textAndImagesDict(trimAndNormaliseWhitespace: Bool = true)throws->(String, String, String) {
+    public func textAndImagesDict(trimAndNormaliseWhitespace: Bool = true)throws->(String, String) {
         let accum: StringBuilder = StringBuilder()
         let imageURLs: StringBuilder = StringBuilder()
-        let locations: StringBuilder = StringBuilder()
-        try NodeTraversor(ImageNodeVisitor2(accum, trimAndNormaliseWhitespace: trimAndNormaliseWhitespace, imageURLs: imageURLs, locations: locations)).traverse(self)
+        try NodeTraversor(ImageNodeVisitor2(accum, trimAndNormaliseWhitespace: trimAndNormaliseWhitespace, imageURLs: imageURLs)).traverse(self)
         let text = accum.toString()
         if trimAndNormaliseWhitespace {
-            return (text.trim2(), imageURLs.toString(), locations.toString())
+            return (text.trim2(), imageURLs.toString())
         }
-        return (text, imageURLs.toString(), locations.toString())
+        return (text, imageURLs.toString())
     }
 
     /**
