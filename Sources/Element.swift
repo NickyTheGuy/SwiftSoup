@@ -1028,7 +1028,7 @@ open class Element: Node {
             let heightLowerLimit = 400
             var filteredImage = ""
             
-            if url == "" {
+            if url == "" || url.range(of: ".gif") != nil {
                 return filteredImage
             }
             
