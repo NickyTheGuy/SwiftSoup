@@ -7,9 +7,11 @@
 //
 
 import Foundation
+import CoreGraphics
+import ImageIO
 
 open class Element: Node {
-	var _tag: Tag
+    var _tag: Tag
 
     private static let classString = "class"
     private static let emptyString = ""
@@ -17,7 +19,7 @@ open class Element: Node {
     private static let rootString = "#root"
 
     //private static let classSplit : Pattern = Pattern("\\s+")
-	private static let classSplit = "\\s+"
+    private static let classSplit = "\\s+"
 
     /**
      * Create a new, standalone Element. (Standalone in that is has no parent.)
@@ -942,6 +944,211 @@ open class Element: Node {
         public func tail(_ node: Node, _ depth: Int) {
         }
     }
+
+    class ImageNodeVisitor: NodeVisitor {
+        let accum: StringBuilder
+        let trimAndNormaliseWhitespace: Bool
+        var currentSource: Element? = nil
+        init(_ accum: StringBuilder, trimAndNormaliseWhitespace: Bool) {
+            self.accum = accum
+            self.trimAndNormaliseWhitespace = trimAndNormaliseWhitespace
+        }
+        public func head(_ node: Node, _ depth: Int) {
+            if let textNode = (node as? TextNode) {
+                if trimAndNormaliseWhitespace {
+                    Element.appendNormalisedText(accum, textNode)
+                } else {
+                    accum.append(textNode.getWholeText())
+                }
+            } else if let element = (node as? Element) {
+                var siblings = element.siblingElements()
+                if element._tag.getName() == "source" {
+                    if currentSource == nil || !(siblings.contains(currentSource!) || element == currentSource) {
+                        do {
+                            var sources = try siblings.select("source")
+                            sources.add(0, element)
+                            currentSource = sources.last()
+                            
+                            do {
+                                let srcset = try currentSource!.attr("srcset")
+                                let images = srcset.components(separatedBy: ",")
+                                accum.append("<img>\(images.last!)</img>")
+                            }catch{
+                                do {
+                                    let src = try currentSource!.attr("src")
+                                    accum.append("<img>\(src)</img>")
+                                }catch{
+                                    print("Failed to decode image")
+                                }
+                            }
+                        }catch{
+                            print("Failed to decode image")
+                        }
+                    }
+                } else if element._tag.getName() == "img" {
+                    if currentSource == nil || !(siblings.contains(currentSource!) || element == currentSource) {
+                        do {
+                            let srcset = try element.attr("srcset")
+                            let images = srcset.components(separatedBy: ",")
+                            accum.append("<img>\(images.last!)</img>")
+                        }catch{
+                            do {
+                                let src = try element.attr("src")
+                                accum.append("<img>\(src)</img>")
+                            }catch{
+                                print("Failed to decode image")
+                            }
+                        }
+                    }
+                } else if !accum.isEmpty &&
+                    (element.isBlock() || element._tag.getName() == "br") &&
+                    !TextNode.lastCharIsWhitespace(accum) {
+                    accum.append(" ")
+                }
+            }
+        }
+        
+        public func tail(_ node: Node, _ depth: Int) {
+        }
+    }
+    
+    class ImageNodeVisitor2: NodeVisitor {
+        let accum: StringBuilder
+        let trimAndNormaliseWhitespace: Bool
+        let imageURLs: StringBuilder
+        var currentSource: Element? = nil
+        init(_ accum: StringBuilder, trimAndNormaliseWhitespace: Bool, imageURLs: StringBuilder) {
+            self.accum = accum
+            self.trimAndNormaliseWhitespace = trimAndNormaliseWhitespace
+            self.imageURLs = imageURLs
+        }
+        
+        public func filterImageBySizeAndShape(url: String) -> String {
+            let widthLowerLimit = 600
+            let heightLowerLimit = 400
+            var filteredImage = ""
+            
+            if url == "" || url.range(of: ".gif") != nil {
+                return filteredImage
+            }
+            
+            if let imageSource = CGImageSourceCreateWithURL(URL(string: url)! as CFURL, nil) {
+                if let imageProperties = CGImageSourceCopyPropertiesAtIndex(imageSource, 0, nil) as? [CFString: Any] {
+                    if let pixelWidth = imageProperties[kCGImagePropertyPixelWidth] as? Int,
+                       let pixelHeight = imageProperties[kCGImagePropertyPixelHeight] as? Int {
+                        if pixelWidth >= widthLowerLimit && pixelHeight >= heightLowerLimit {
+                            filteredImage = url
+                        }
+                    }
+                }
+            }
+            
+            return filteredImage
+        }
+        
+        public func processSRCs(sets: [String], srcs: [String]) -> String {
+            var finalURLsArray = [String]()
+            for set in sets {
+                let allSources = set.components(separatedBy: ",")
+                let allURLs = allSources.map { $0.components(separatedBy: .whitespaces).filter { !$0.isEmpty }.first! }
+                let onlyURLs = allURLs.filter { $0.starts(with: "http") }
+                finalURLsArray += onlyURLs
+            }
+            finalURLsArray += srcs
+            
+            for url in finalURLsArray {
+                let filteredImage = filterImageBySizeAndShape(url: url)
+                if filteredImage != "" {
+                    return filteredImage
+                }
+            }
+            return ""
+        }
+        
+        public func checkDuplicates(url: String) {
+            let uniqueURLs = imageURLs.toString().split(separator: "<").map { str in String(str) }
+            
+            if !uniqueURLs.contains(where: { $0 == url }) {
+                imageURLs.append(url + "<")
+                accum.append("[KEEP THIS MARKER] ")
+            }
+        }
+        
+        public func head(_ node: Node, _ depth: Int) {
+            if let textNode = (node as? TextNode) {
+                if trimAndNormaliseWhitespace {
+                    Element.appendNormalisedText(accum, textNode)
+                } else {
+                    accum.append(textNode.getWholeText())
+                }
+            } else if let element = (node as? Element) {
+                var siblings = element.siblingElements()
+                if element._tag.getName() == "source" {
+                    if currentSource == nil || !(siblings.contains(currentSource!) || element == currentSource) {
+                        do {
+                            var sources = try siblings.select("source")
+                            sources.add(0, element)
+                            currentSource = sources.last()
+                            
+                            var images = ""
+                            var sets = [String]()
+                            for source in sources {
+                                if let srcset = try? source.attr("srcset"), !srcset.isEmpty {
+                                    sets.append(srcset)
+                                }
+                            }
+                            
+                            var srcs = [String]()
+                            for source in sources {
+                                if let src = try currentSource!.attr("src").components(separatedBy: .whitespaces).filter({ $0.starts(with: "http") }).first {
+                                    srcs.append(src)
+                                }
+                            }
+                            if !(sets.isEmpty && srcs.isEmpty){
+                                images = processSRCs(sets: sets, srcs: srcs)
+                            }
+                            if images != "" {
+                                checkDuplicates(url: images)
+                            }
+                        }catch{
+                            print("Failed to decode image")
+                        }
+                    }
+                } else if element._tag.getName() == "img" {
+                    if currentSource == nil || !(siblings.contains(currentSource!) || element == currentSource) {
+                        do {
+                            var images = ""
+                            var sets = [String]()
+                            if let srcset = try? element.attr("srcset"), !srcset.isEmpty {
+                                sets.append(srcset)
+                            }
+                            
+                            var srcs = [String]()
+                            if let src = try element.attr("src").components(separatedBy: .whitespaces).filter({ $0.starts(with: "http") }).first {
+                                srcs.append(src)
+                            }
+                            if !(sets.isEmpty && srcs.isEmpty){
+                                images = processSRCs(sets: sets, srcs: srcs)
+                            }
+                            if images != "" {
+                                checkDuplicates(url: images)
+                            }
+                        }catch{
+                            print("Failed to decode image")
+                        }
+                    }
+                } else if !accum.isEmpty &&
+                    (element.isBlock() || element._tag.getName() == "br") &&
+                    !TextNode.lastCharIsWhitespace(accum) && !TextNode.lastCharIsNewLine(accum) {
+                    accum.append("\n")
+                }
+            }
+        }
+        
+        public func tail(_ node: Node, _ depth: Int) {
+        }
+    }
+    
     public func text(trimAndNormaliseWhitespace: Bool = true)throws->String {
         let accum: StringBuilder = StringBuilder()
         try NodeTraversor(textNodeVisitor(accum, trimAndNormaliseWhitespace: trimAndNormaliseWhitespace)).traverse(self)
@@ -950,6 +1157,27 @@ open class Element: Node {
             return text.trim()
         }
         return text
+    }
+
+    public func textAndImages(trimAndNormaliseWhitespace: Bool = true)throws->String {
+        let accum: StringBuilder = StringBuilder()
+        try NodeTraversor(ImageNodeVisitor(accum, trimAndNormaliseWhitespace: trimAndNormaliseWhitespace)).traverse(self)
+        let text = accum.toString()
+        if trimAndNormaliseWhitespace {
+            return text.trim()
+        }
+        return text
+    }
+    
+    public func textAndImagesDict(trimAndNormaliseWhitespace: Bool = true)throws->(String, String) {
+        let accum: StringBuilder = StringBuilder()
+        let imageURLs: StringBuilder = StringBuilder()
+        try NodeTraversor(ImageNodeVisitor2(accum, trimAndNormaliseWhitespace: trimAndNormaliseWhitespace, imageURLs: imageURLs)).traverse(self)
+        let text = accum.toString()
+        if trimAndNormaliseWhitespace {
+            return (text.trim2(), imageURLs.toString())
+        }
+        return (text, imageURLs.toString())
     }
 
     /**
@@ -1070,13 +1298,13 @@ open class Element: Node {
      * the backing {@code class} attribute; use the {@link #classNames(java.util.Set)} method to persist them.
      * @return set of classnames, empty if no class attribute
      */
-	public func classNames()throws->OrderedSet<String> {
-		let fitted = try className().replaceAll(of: Element.classSplit, with: " ", options: .caseInsensitive)
-		let names: [String] = fitted.components(separatedBy: " ")
-		let classNames: OrderedSet<String> = OrderedSet(sequence: names)
-		classNames.remove(Element.emptyString) // if classNames() was empty, would include an empty class
-		return classNames
-	}
+    public func classNames()throws->OrderedSet<String> {
+        let fitted = try className().replaceAll(of: Element.classSplit, with: " ", options: .caseInsensitive)
+        let names: [String] = fitted.components(separatedBy: " ")
+        let classNames: OrderedSet<String> = OrderedSet(sequence: names)
+        classNames.remove(Element.emptyString) // if classNames() was empty, would include an empty class
+        return classNames
+    }
 
     /**
      Set the element's {@code class} attribute to the supplied class names.
@@ -1148,12 +1376,12 @@ open class Element: Node {
      @return this element
      */
     @discardableResult
-	public func addClass(_ className: String)throws->Element {
-		let classes: OrderedSet<String> = try classNames()
-		classes.append(className)
-		try classNames(classes)
-		return self
-	}
+    public func addClass(_ className: String)throws->Element {
+        let classes: OrderedSet<String> = try classNames()
+        classes.append(className)
+        try classNames(classes)
+        return self
+    }
 
     /**
      Remove a class name from this element's {@code class} attribute.
@@ -1163,7 +1391,7 @@ open class Element: Node {
     @discardableResult
     public func removeClass(_ className: String)throws->Element {
         let classes: OrderedSet<String> = try classNames()
-		classes.remove(className)
+        classes.remove(className)
         try classNames(classes)
         return self
     }
@@ -1275,40 +1503,40 @@ open class Element: Node {
         return appendable
     }
 
-	/**
-	* Set this element's inner HTML. Clears the existing HTML first.
-	* @param html HTML to parse and set into this element
-	* @return this element
-	* @see #append(String)
-	*/
+    /**
+    * Set this element's inner HTML. Clears the existing HTML first.
+    * @param html HTML to parse and set into this element
+    * @return this element
+    * @see #append(String)
+    */
     @discardableResult
-	public func html(_ html: String)throws->Element {
-		empty()
-		try append(html)
-		return self
-	}
+    public func html(_ html: String)throws->Element {
+        empty()
+        try append(html)
+        return self
+    }
 
-	public override func copy(with zone: NSZone? = nil) -> Any {
-		let clone = Element(_tag, baseUri!, attributes!)
-		return copy(clone: clone)
-	}
+    public override func copy(with zone: NSZone? = nil) -> Any {
+        let clone = Element(_tag, baseUri!, attributes!)
+        return copy(clone: clone)
+    }
 
-	public override func copy(parent: Node?) -> Node {
-		let clone = Element(_tag, baseUri!, attributes!)
-		return copy(clone: clone, parent: parent)
-	}
-	public override func copy(clone: Node, parent: Node?) -> Node {
-		return super.copy(clone: clone, parent: parent)
-	}
+    public override func copy(parent: Node?) -> Node {
+        let clone = Element(_tag, baseUri!, attributes!)
+        return copy(clone: clone, parent: parent)
+    }
+    public override func copy(clone: Node, parent: Node?) -> Node {
+        return super.copy(clone: clone, parent: parent)
+    }
 
     public static func ==(lhs: Element, rhs: Element) -> Bool {
-    	guard lhs as Node == rhs as Node else {
+        guard lhs as Node == rhs as Node else {
             return false
         }
         
         return lhs._tag == rhs._tag
     }
-	
+    
     override public func hash(into hasher: inout Hasher) {
         super.hash(into: &hasher)
         hasher.combine(_tag)

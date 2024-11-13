@@ -71,7 +71,7 @@ open class TextNode: Node {
      @return text
      */
     open func getWholeText() -> String {
-		return attributes == nil ? _text : attributes!.get(key: TextNode.TEXT_KEY)
+        return attributes == nil ? _text : attributes!.get(key: TextNode.TEXT_KEY)
     }
 
     /**
@@ -103,11 +103,11 @@ open class TextNode: Node {
     }
 
     override func outerHtmlHead(_ accum: StringBuilder, _ depth: Int, _ out: OutputSettings)throws {
-		if (out.prettyPrint() &&
-			((siblingIndex == 0 && (parentNode as? Element) != nil &&  (parentNode as! Element).tag().formatAsBlock() && !isBlank()) ||
-				(out.outline() && siblingNodes().count > 0 && !isBlank()) )) {
+        if (out.prettyPrint() &&
+            ((siblingIndex == 0 && (parentNode as? Element) != nil &&  (parentNode as! Element).tag().formatAsBlock() && !isBlank()) ||
+                (out.outline() && siblingNodes().count > 0 && !isBlank()) )) {
             indent(accum, depth, out)
-		}
+        }
 
         let par: Element? = parent() as? Element
         let normaliseWhite = out.prettyPrint() && par != nil && !Element.preserveWhitespace(par!)
@@ -141,6 +141,10 @@ open class TextNode: Node {
 
     static public func lastCharIsWhitespace(_ sb: StringBuilder) -> Bool {
         return sb.toString().last == " "
+    }
+    
+    static public func lastCharIsNewLine(_ sb: StringBuilder) -> Bool {
+        return sb.toString().last!.isNewline
     }
 
     // attribute fiddling. create on first access.
@@ -183,17 +187,17 @@ open class TextNode: Node {
         return try super.absUrl(attributeKey)
     }
 
-	public override func copy(with zone: NSZone? = nil) -> Any {
-		let clone = TextNode(_text, baseUri)
-		return super.copy(clone: clone)
-	}
+    public override func copy(with zone: NSZone? = nil) -> Any {
+        let clone = TextNode(_text, baseUri)
+        return super.copy(clone: clone)
+    }
 
-	public override func copy(parent: Node?) -> Node {
-		let clone = TextNode(_text, baseUri)
-		return super.copy(clone: clone, parent: parent)
-	}
+    public override func copy(parent: Node?) -> Node {
+        let clone = TextNode(_text, baseUri)
+        return super.copy(clone: clone, parent: parent)
+    }
 
-	public override func copy(clone: Node, parent: Node?) -> Node {
-		return super.copy(clone: clone, parent: parent)
-	}
+    public override func copy(clone: Node, parent: Node?) -> Node {
+        return super.copy(clone: clone, parent: parent)
+    }
 }

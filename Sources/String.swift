@@ -10,11 +10,11 @@ import Foundation
 
 extension String {
 
-	subscript (i: Int) -> Character {
+    subscript (i: Int) -> Character {
         return self[self.index(self.startIndex, offsetBy: i)]
     }
 
-	subscript (i: Int) -> String {
+    subscript (i: Int) -> String {
         return String(self[i] as Character)
     }
 
@@ -24,15 +24,15 @@ extension String {
         self = s
     }
 
-	func unicodeScalar(_ i: Int) -> UnicodeScalar {
+    func unicodeScalar(_ i: Int) -> UnicodeScalar {
         let ix = unicodeScalars.index(unicodeScalars.startIndex, offsetBy: i)
-		return unicodeScalars[ix]
+        return unicodeScalars[ix]
     }
 
-	func string(_ offset: Int, _ count: Int) -> String {
-		let truncStart = self.unicodeScalars.count-offset
-		return String(self.unicodeScalars.suffix(truncStart).prefix(count))
-	}
+    func string(_ offset: Int, _ count: Int) -> String {
+        let truncStart = self.unicodeScalars.count-offset
+        return String(self.unicodeScalars.suffix(truncStart).prefix(count))
+    }
 
     static func split(_ value: String, _ offset: Int, _ count: Int) -> String {
         let start = value.index(value.startIndex, offsetBy: offset)
@@ -45,7 +45,7 @@ extension String {
         #endif
     }
 
-	func isEmptyOrWhitespace() -> Bool {
+    func isEmptyOrWhitespace() -> Bool {
 
         if(self.isEmpty) {
             return true
@@ -53,11 +53,11 @@ extension String {
         return (self.trimmingCharacters(in: CharacterSet.whitespaces) == "")
     }
 
-	func startsWith(_ string: String) -> Bool {
+    func startsWith(_ string: String) -> Bool {
         return self.hasPrefix(string)
     }
     
-	func indexOf(_ substring: String, _ offset: Int ) -> Int {
+    func indexOf(_ substring: String, _ offset: Int ) -> Int {
         if(offset > count) {return -1}
 
         let maxIndex = self.count - substring.count
@@ -77,7 +77,7 @@ extension String {
         return -1
     }
 
-	func indexOf(_ substring: String) -> Int {
+    func indexOf(_ substring: String) -> Int {
         return self.indexOf(substring, 0)
     }
 
@@ -88,6 +88,18 @@ extension String {
         guard count > 0 else { return self }
         let (firstChar, lastChar) = (first!, last!)
         if firstChar.isWhitespace || lastChar.isWhitespace || firstChar == "\n" || lastChar == "\n" {
+            return trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return self
+    }
+    
+    func trim2() -> String {
+        // trimmingCharacters() in the stdlib is not very efficiently
+        // implemented, perhaps because it always creates a new string.
+        // Avoid actually calling it if it's not needed.
+        guard count > 0 else { return self }
+        let (firstChar, lastChar) = (first!, last!)
+        if firstChar.isWhitespace || lastChar.isWhitespace {
             return trimmingCharacters(in: .whitespacesAndNewlines)
         }
         return self
@@ -112,11 +124,11 @@ extension String {
         return self[i] as Character
     }
 
-	func substring(_ beginIndex: Int) -> String {
+    func substring(_ beginIndex: Int) -> String {
         return String.split(self, beginIndex, self.count-beginIndex)
     }
 
-	func substring(_ beginIndex: Int, _ count: Int) -> String {
+    func substring(_ beginIndex: Int, _ count: Int) -> String {
         return String.split(self, beginIndex, count)
     }
 
@@ -176,15 +188,15 @@ extension String {
     }
 
     func equals(_ s: String?) -> Bool {
-		if(s == nil) {return false}
+        if(s == nil) {return false}
         return self == s!
     }
 }
 
 extension String.Encoding {
-	func canEncode(_ string: String) -> Bool {
-		return  string.cString(using: self) != nil
-	}
+    func canEncode(_ string: String) -> Bool {
+        return  string.cString(using: self) != nil
+    }
 
     public func displayName() -> String {
         switch self {
@@ -213,52 +225,6 @@ extension String.Encoding {
             case String.Encoding.utf32LittleEndian: return "UTF-32LE"
         default:
             return self.description
-        }
-    }
-
-    /// Errors that are thrown when a ``String.Encoding`` fails to be represented as a MIME type.
-    public enum EncodingMIMETypeError: Error, LocalizedError {
-        /// There is no IANA equivalent of the provided string encoding.
-        case noIANAEquivalent(String.Encoding)
-
-        /// Returns a human-readable representation of this error.
-        public var errorDescription: String? {
-            switch self {
-            case .noIANAEquivalent(let encoding):
-                return String("There is no IANA equivalent for \(encoding)")
-            }
-        }
-    }
-
-    /// Returns the encoding as an equivalent IANA MIME name.
-    ///
-    /// - SeeAlso: https://www.iana.org/assignments/character-sets/character-sets.xhtml
-    /// - Throws: EncodingMIMETypeError if there is no IANA-compatible MIME name.
-    public func mimeName() throws -> String {
-        switch self {
-            case .ascii: return "US-ASCII"
-            case .nextstep: throw EncodingMIMETypeError.noIANAEquivalent(self)
-            case .japaneseEUC: return "EUC-JP"
-            case .utf8: return "UTF-8"
-            case .isoLatin1: return "csISOLatin1"
-            case .symbol: throw EncodingMIMETypeError.noIANAEquivalent(self)
-            case .nonLossyASCII: return "US-ASCII"
-            case .shiftJIS: return "Shift_JIS"
-            case .isoLatin2: return "csISOLatin2"
-            case .windowsCP1251: return "windows-1251"
-            case .windowsCP1252: return "windows-1252"
-            case .windowsCP1253: return "windows-1253"
-            case .windowsCP1254: return "windows-1254"
-            case .windowsCP1250: return "windows-1250"
-            case .iso2022JP: return "csISO2022JP"
-            case .macOSRoman: throw EncodingMIMETypeError.noIANAEquivalent(self)
-            case .utf16: return "UTF-16"
-            case .utf16BigEndian: return "UTF-16BE"
-            case .utf16LittleEndian: return "UTF-16LE"
-            case .utf32: return "UTF-32"
-            case .utf32BigEndian: return "UTF-32BE"
-            case .utf32LittleEndian: return "UTF-32LE"
-            default: throw EncodingMIMETypeError.noIANAEquivalent(self)
         }
     }
 }
